@@ -15,6 +15,24 @@ const char* password = "BananaRock";
 boolean connectWifi();
 boolean wifiConnected = false;
 boolean OverTemp = false;
+boolean WeeklyGraph = 0;
+boolean DailyGraph = 0;
+boolean StatusPage = 1;
+
+int DSTOffset = 1;
+
+unsigned long currentTime = millis();
+
+unsigned long previousTime = 0;
+unsigned long previousMillis = 0;
+byte currentseconds = 0 ;
+byte currentminutes = 55;
+byte currenthours = 12 ;
+long currentday = 0 ;
+long currentmonth = 0 ;
+byte Minute15Counter =14;
+
+boolean SetTimeWasSuccesfull = 0;
 
 // Set up the temperature sensor
 // Data wire is plugged into digital pin IO0
@@ -40,7 +58,7 @@ float MinTemperature = 0.0;// freezer will likely never get this warm, and will 
 
 const char* WatchDogHost = "192.168.1.60"; // ip address of the watchdog esp8266
 long WatchDogCounterLoopThreshold = 60;// 60 is about 60 secs
-long WatchDogLoopCounter = 0;
+long WatchDogSecondCounter = 0;
 
 int   AlarmNumber = 35 ;// defines which Virtual Button number is passed to the watchdog proxy and then triggered in Virtual Button land 
 
@@ -52,19 +70,19 @@ const long timeoutTime = 2000; // Define web page timeout time in milliseconds (
 String NormalFaultState = "Normal";
 
 
-String EventLogArray[64] ; // 20 events each containing Date [0], Time[1], Proxt [2]. last 3 entries (60,61,62) are headers
-//String LastRebootDate ;
-//String LastRebootTime ;
+float DailyTempArray[110] ; // 96 * 15min entries . array set at 100 cos round numbers
+// index 0 is the reading just taken, 1 is 30 min ago ect 
+
 //float DayCounter = 0;
-long LoopCounter =0; // number of 1 second loops since reboot
+long SecondCounter =0; // number of 1 second loops since reboot
 long DayCounter = 0;
 long HourCounter = 0;
 long MinuteCounter = 0;
-long SecondCounter = 0;
+//long SecondCounter = 0;
 
 
 
-byte EventLogArrayIndex = 0;
+byte DailyTempArrayIndex = 0;
 //byte WDResponcesArrayIndex = 0;
 
 WiFiServer server(80); // internally facing web page is http.
@@ -75,10 +93,6 @@ WiFiClientSecure client;
 
 String header; // Variable to store the HTTP request for the local webserver
 
-unsigned long currentTime = millis();
-
-unsigned long previousTime = 0;
-unsigned long previousMillis = 0;
 
 bool TempAlarmMute = true; // start unmuted
 bool DoorAlarmMute = true; // start unmuted
@@ -96,6 +110,7 @@ void setup() {
   delay(2000); // let the serial port initistalsation crap complete
     Serial.println("Booting - Freezer Alarm...");
   delay(1000);
+  Serial.println("Booting - Freezer Alarm...");
   Serial.println("flashing LED on GPIO2 (if supported)...");
   //flash GPIO2 (if supported) fast a few times to indicate CPU is booting
   digitalWrite(LedPin, LOW);
@@ -150,48 +165,39 @@ void setup() {
 
 
 
-// populate event log headers
-      EventLogArray[60] = "Date";
-      EventLogArray[61] = "Time";
-      EventLogArray[62] = "Event Info";
+// populate daily temp array with dummy values
+      DailyTempArray[0] = -11.11;
+      DailyTempArray[1] = -22.22;
+      DailyTempArray[2] = -30.33;
+
+      DailyTempArray[12] = -12.00;
+DailyTempArray[19] = -19.00;
+
+            DailyTempArray[24] = -24;
+
+            DailyTempArray[50] = -50;
       
-      EventLogArray[57] = "1st Entry date";
-      EventLogArray[58] = "1st Entry time";
-      EventLogArray[59] = "1st Entry Event";
+      DailyTempArray[94] = -100.1;
+      DailyTempArray[95] = -100.2;
+      DailyTempArray[96] = -96.3;
+       DailyTempArray[100] = -100.3;
 
-      EventLogArray[54] = "2 Entry date";
-      EventLogArray[55] = "2 Entry time";
-      EventLogArray[56] = "2 Entry Event";
-
-      EventLogArray[51] = "3 Entry date";
-      EventLogArray[52] = "3 Entry time";
-      EventLogArray[53] = "3 Entry Event";
-      
-      EventLogArray[30] = "1/2way date";
-      EventLogArray[31] = " 1/2way Time";
-      EventLogArray[32] = "1/2way Event Info";
-
-
-
-      EventLogArray[3] = "2nd2Last Entry date";
-      EventLogArray[4] = "2nd2Last Entry time";
-      EventLogArray[5] = "2nd2Last Entry Event";
-
-      EventLogArray[0] = "oldest Entry date";
-      EventLogArray[1] = "oldest Entry time";
-      EventLogArray[2] = "oldest Entry Event";
-    
-    
-     
-     // Populate " - " in all Event log slots
-
-     for (EventLogArrayIndex=0; EventLogArrayIndex<57; EventLogArrayIndex = EventLogArrayIndex+1){
-    
-     EventLogArray[EventLogArrayIndex] = " - ";
-     }
-
-
-
+  SetTime(); // sysnc the clock..
+     // Serial.println(" Delaying 5 sec before trying clock sync again...");
+   //   delay (5000);
+ // SetTime(); // sysnc the clock.. 
+     //  Serial.println(" comleted 2nd clock sync ..");
+       /*
+  // Load root certificate in DER format into WiFiClientSecure object
+  bool res = client.setCACert_P(caCert, caCertLen);
+  if (!res) {
+    Serial.println("Failed to load root CA certificate!");
+    while (true) {
+      yield();
+    }
+    Serial.println("root CA certificate loaded");
+  }
+*/
   //TempAlarmMute = false; // start muted
   //DoorAlarmMute = false; // start muted
   
@@ -313,6 +319,28 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
               MinTemperature = -30;
             }
 
+            if (header.indexOf("GET /WeeklyGraph") >= 0) {
+              WeeklyGraph = 1;
+              DailyGraph = 0;
+              StatusPage = 0;
+            }
+
+            if (header.indexOf("GET /DailyGraph") >= 0) {
+              WeeklyGraph = 0;
+              DailyGraph = 1;
+              StatusPage = 0;
+            }
+
+           if (header.indexOf("GET /StatusPage") >= 0) {
+              WeeklyGraph = 0;
+              DailyGraph = 0;
+              StatusPage = 1;
+            }
+
+             if (header.indexOf("GET /DummyEntry") >= 0) {
+
+            }
+
         //Display the web page
 
             client.println("<!DOCTYPE html><html>");
@@ -339,10 +367,21 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
             //client.println(".buttonsmall { background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
             //client.println("text-decoration: none; font-size: 10px; margin: 2px; cursor: pointer;}");
 
+              client.print("<p><a href=\"/StatusPage\"><button class=\"buttonsmall\">Status Page</button></a> <a href=\"/DailyGraph\"><button class=\"buttonsmall\">DailyGraph</button></a></p>");
+                   client.println();
+
             // Web Page Heading
             client.println("<body><h1>Freezer Status</h1>");
 
-            // Display current watchdog state
+             // Display date
+                client.println("<p>Current Date is " + String(currentday) + " / " + String(currentmonth)  + "</p>");
+              // Display current time of day
+                client.println("<p>Current Time is " + String(currenthours) + ":" + String(currentminutes) + ":" + String(currentseconds) + ":" + "</p>");
+              
+
+if (StatusPage == 1) {;
+
+            // Display current freezer state
             
 
             client.println ("<h1>Current Freezer Temperature: " + String(CurrentTemperature) + "°C</h1>\n");
@@ -375,7 +414,7 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
               client.println("<p><a href=\"/2/off\"><button class=\"button buttonNormal\">Door Alarm Enabled</button></a></p>");
             }         
             // Display date
-            client.println("<p>Uptime " + String(DayCounter) + " Days " + String(HourCounter) + " Hours " + String(MinuteCounter) + " Minutes " + String(LoopCounter) + " Seconds" + "</p>");
+            client.println("<p>Uptime " + String(DayCounter) + " Days " + String(HourCounter) + " Hours " + String(MinuteCounter) + " Minutes " + String(SecondCounter) + " Seconds" + "</p>");
                    
                         
 /*
@@ -384,15 +423,14 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
                   // put extended logging stuff here     
                    // Display log 60 - 30
                    /*
-                    // display Eventlog2
-                   for (EventLogArrayIndex=63; EventLogArrayIndex>0; EventLogArrayIndex = EventLogArrayIndex-3){
+                    // display DailyTemp2
+                   for (DailyTempArrayIndex=63; DailyTempArrayIndex>0; DailyTempArrayIndex = DailyTempArrayIndex-3){
     
-                   client.println("<p>" + (EventLogArray[EventLogArrayIndex]) + "       " + (EventLogArray[(EventLogArrayIndex+1)]) + " " + (EventLogArray[(EventLogArrayIndex+2)])+  "</p>");
+                   client.println("<p>" + (DailyTempArray[DailyTempArrayIndex]) + "       " + (DailyTempArray[(DailyTempArrayIndex+1)]) + " " + (DailyTempArray[(DailyTempArrayIndex+2)])+  "</p>");
                    }
 */
                    client.print("<p><a href=\"/IncTempThreshold\"><button class=\"buttonsmall\">Inc Alarm Temp Threshold</button></a> <a href=\"/DecTempThreshold\"><button class=\"buttonsmall\">Dec Alarm Temp Threshold</button></a></p>");
-                   //client.print("<p><a href=\"/IncStandThreshold\"><button class=\"buttonsmall\">Inc Standing Time</button></a> <a href=\"/DecStandThreshold\"><button class=\"buttonsmall\">Dec Standing Time</button></a></p>");
-                    client.println();
+                   client.println();
                     
 
                     // Display Mute Buttons
@@ -412,14 +450,71 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
                     client.println("<p><a href=\"/ResetMaxMin\"> <button class=\"buttonsmall\">Reset Max Min Temps</button></a></p>");
                    
                     
-                    //Display EventLog Button
-                    //client.println("<p><a href=\"/EventLog2\"> <button class=\"buttonsmall\">EventLog</button></a></p>");
-                    //client.println("<p><a href=\"/WatchDog\"><button class=\"buttonsmall\">WatchDog</button></a> <a href=\"/WDFailLog\"><button class=\"buttonsmall\">WDFailLog</button></a> <a href=\"/EventLog2\"> <button class=\"buttonsmall\">EventLog</button></a></p>");
+                    //Display DailyTemp Button
+                    //client.println("<p><a href=\"/DailyTemp2\"> <button class=\"buttonsmall\">DailyTemp</button></a></p>");
+                    //client.println("<p><a href=\"/WatchDog\"><button class=\"buttonsmall\">WatchDog</button></a> <a href=\"/WDFailLog\"><button class=\"buttonsmall\">WDFailLog</button></a> <a href=\"/DailyTemp2\"> <button class=\"buttonsmall\">DailyTemp</button></a></p>");
 
 
+}
+
+if (DailyGraph == 1) {;
+
+            // Display last 24 hrs temps
 
 
-  // Update the web page with the current temperature and the graph of the last week's readings
+            client.println ("<p> Current Temp" + String(CurrentTemperature) + "</p>");
+            client.println (""); 
+
+                    client.println ("<p> 15min counter =" + String(Minute15Counter) + "</p>");
+
+            client.println ("<p> 15 Min readings for last 24 hrs </p>");
+
+
+// disply array contents 
+     // for (LineIndex =0; LineIndex <10; LineIndex = LineIndex +1) {
+      
+                    client.print("<p>");
+                    
+                   for (DailyTempArrayIndex=0; DailyTempArrayIndex<=100; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+                   client.print( String(DailyTempArray[DailyTempArrayIndex]) + " , " );
+                   }
+                    client.println("</p>");
+
+                    
+
+      
+            
+/*
+ * 
+ * 
+                     client.print("<p>");
+                    // display array contents 0 - 10
+                   for (DailyTempArrayIndex=0; DailyTempArrayIndex<=9; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+                   client.print( String(DailyTempArray[DailyTempArrayIndex]) + " , " );
+                   }
+                    client.println("</p>");
+
+                    client.print("<p>");
+                    // display array contents 10 - 19
+                   for (DailyTempArrayIndex=10; DailyTempArrayIndex<=19; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+                   client.print( String(DailyTempArray[DailyTempArrayIndex]) + " , " );
+                   }
+                    client.println("</p>");
+ * 
+ * client.print("<p>" + String(DailyTempArray[DailyTempArrayIndex]) + " , " +  "</p>");
+                   }
+client.println (" String(DailyTempArray[0])");
+            client.println ("");
+
+client.println ("String(CurrentTemperature)");
+            client.println (""); 
+  */          
+}            
+
+  // Update the web page with the current temperature 
   //updateWebPage(temperature); // dont know why this call fails, code copied inline to void loop for now...
 //Update the web page with the current temperature and the graph of the last week's readings
 
@@ -465,10 +560,10 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
 
 
 
-WatchDogLoopCounter = WatchDogLoopCounter +1;
-   Serial.println(WatchDogLoopCounter);
-   if (WatchDogLoopCounter > WatchDogCounterLoopThreshold) {
-        WatchDogLoopCounter = 0;
+WatchDogSecondCounter = WatchDogSecondCounter +1;
+   Serial.println(WatchDogSecondCounter);
+   if (WatchDogSecondCounter > WatchDogCounterLoopThreshold) {
+        WatchDogSecondCounter = 0;
         AlarmNumber = 35; // Freezer alarm watchdog code
         WatchDogPost();
         Serial.println("Watchdog checkin call");
@@ -503,18 +598,124 @@ WatchDogLoopCounter = WatchDogLoopCounter +1;
            }
    }
   
-  // Add a delay between readings
+  // Add a delay between program cycles
     delay(1000); // roughly a second
 
-  LoopCounter = LoopCounter +2;
+  //SecondCounter = SecondCounter +2;
 
 // Maintain RTC 
 
-       
-        if (LoopCounter == 60)
+if (millis() >= (previousMillis)) {
+        //Serial.print(" millis = ");
+        //Serial.print(String (millis())); 
+        previousMillis = previousMillis + 1000;
+        //Serial.print(" prevmillis = ");
+        //Serial.print(String (previousMillis));
+        // should be here every second....
+
+
+
+        currentseconds = currentseconds + 1;
+        //SecondCounter = SecondCounter +1;
+        if (currentseconds == 60)
+        {
+           // Things to do every minute here
+          currentseconds = 0;
+          currentminutes = currentminutes + 1;
+          //MinuteCounter = MinuteCounter +1;
+          Minute15Counter = Minute15Counter +1;
+          Serial.println("another minute has passed");
+
+        }
+        if (currentminutes == 60)
+        {
+          
+
+          // Things to do every hour here
+         currentminutes = 0;
+         currenthours = currenthours + 1;
+         //HourCounter = HourCounter +1;
+         DayCounter = DayCounter + 0.0417 ; // (1/24)
+         //Serial.println("UpTimeDays =  " + String(UpTimeDays) );
+
+        }
+        if (currenthours == 24)
+        {
+          // Things to do every day here
+          currentseconds = 0;
+          currentminutes = 0;
+          currenthours = 0;
+         // DayCounter = DayCounter +1;
+          
+          SetTime (); // resync the clock
+          //UpTimeDays = UpTimeDays + 0.5; IDK why but it sometimes counts 2X at this point
+             
+        }
+
+
+
+      } // end 1 second
+
+/*
+// this doesnt fucking work, dont know why....
+      if (Minute15Counter == 15) {
+        Minute15Counter = 0;
+
+        // shuffle Temp Array 1 place to the right
+
+            
+    // Rotates DailyTempArray[100] one slot to the right (toward index 100)
+
+
+    
+    Serial.println("moving daily temp array");
+     for (DailyTempArrayIndex=100; DailyTempArrayIndex<=1; DailyTempArrayIndex = DailyTempArrayIndex-1){
+
+     Serial.print ("DailyTempArrayIndex = " + String(DailyTempArrayIndex));
+     DailyTempArray[DailyTempArrayIndex] = DailyTempArray[(DailyTempArrayIndex-1)];
+
+   
+    } 
+
+        // Insert current temp into index 100
+        Serial.println("inserting new temp into index 0");
+           DailyTempArray[0] = CurrentTemperature ;
+        
+      }
+*/
+
+  
+ // This works, but is backwards, ie new values are insrted at the right hand end 
+            if (Minute15Counter == 15) {
+        Minute15Counter = 0;
+
+        // shuffle Temp Array 1 place to the left
+
+            
+    // Rotates DailyTempArray[100] one slot to the left (toward index 0)
+
+    // for (DailyTempArrayIndex=0; DailyTempArrayIndex<=100; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+    Serial.println("moving daily temp array");
+     for (DailyTempArrayIndex=0; DailyTempArrayIndex<=99; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+     DailyTempArray[DailyTempArrayIndex] = DailyTempArray[(DailyTempArrayIndex+1)];
+
+    Serial.print ("DailyTempArrayIndex = " + String(DailyTempArrayIndex));
+    } 
+
+        // Insert current temp into index 100
+        Serial.println("inserting new temp into index 0");
+           DailyTempArray[100] = CurrentTemperature ;
+        
+      }
+
+/*
+//old loopcountig       
+        if (SecondCounter == 60)
         {
            // Things to do every second here
-          LoopCounter = 0;
+          SecondCounter = 0;
           MinuteCounter = MinuteCounter + 1;
           //Serial.println("another minute has passed");
 
@@ -526,20 +727,20 @@ WatchDogLoopCounter = WatchDogLoopCounter +1;
           // Things to do every hour here
          MinuteCounter = 0;
          HourCounter = HourCounter + 1;
-         DayCounter = DayCounter + 0.0417 ; // (1/24)
+         //DayCounter = DayCounter + 0.0417 ; // (1/24)
          //Serial.println("DayCounter =  " + String(DayCounter) );
 
         }
         if (HourCounter == 24)
         {
           // Things to do every day here
-          LoopCounter = 0;
+          SecondCounter = 0;
           MinuteCounter = 0;
           HourCounter = 0;
-          
+          DayCounter = DayCounter +1;
   
         }
-
+*/
   
 
     
@@ -673,4 +874,44 @@ boolean connectWifi() {
 
   return state;
 }
+
+
+   void SetTime () {
+      SetTimeWasSuccesfull = 0;
+      
+      Serial.println(" trying to synch clock...");
+      // Synchronize time using SNTP. This is necessary to verify that
+      // the TLS certificates offered by the server are currently valid. Also used by the graph plotting routines
+      Serial.println("Setting time using SNTP");
+      configTime(-13 * 3600, DSTOffset, "pool.ntp.org", "time.nist.gov"); // set localtimezone, DST Offset, timeservers, timeservers...
+
+
+      time_t now = time(nullptr);
+      //while (now < 8 * 3600 * 2) { // would take 8 hrs to fall thru. Thats a long time....
+      while (now < 100) {
+        delay(200);
+        Serial.print(".");
+        Serial.print(String (now));
+        now = time(nullptr);
+      }
+      Serial.println("");
+
+
+      struct tm * timeinfo; //http://www.cplusplus.com/reference/ctime/tm/
+      time(&now);
+      timeinfo = localtime(&now);
+      Serial.println(timeinfo->tm_mon);
+      Serial.println(timeinfo->tm_mday);
+      Serial.println(timeinfo->tm_hour);
+      Serial.println(timeinfo->tm_min);
+      Serial.println(timeinfo->tm_sec);
+      currentseconds = timeinfo->tm_sec ;
+      currentminutes = timeinfo->tm_min;
+      currenthours = timeinfo->tm_hour ;
+      currentday = timeinfo->tm_mday;
+      currentmonth = timeinfo->tm_mon;
+      currentmonth = currentmonth + 1; // month counted from 0
+      SetTimeWasSuccesfull = 1;
+      
+ }
 
