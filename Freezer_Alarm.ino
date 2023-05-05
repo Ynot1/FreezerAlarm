@@ -2,6 +2,10 @@
 //This code written by ChatGPT
 // It didnt compile, and had quite a few issues.
 
+//I added graphing routines to this code on 5/5/23, the date of June Penmans Funeral.
+//Had a bad back, all of that code was done using a laptop while lying down...
+
+
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecureAxTLS.h>
 //#include <WiFiClient.h>
@@ -15,7 +19,7 @@ const char* password = "BananaRock";
 boolean connectWifi();
 boolean wifiConnected = false;
 boolean OverTemp = false;
-boolean WeeklyGraph = 0;
+boolean HourlyGraph = 0;
 boolean DailyGraph = 0;
 boolean StatusPage = 1;
 
@@ -31,6 +35,7 @@ byte currenthours = 12 ;
 long currentday = 0 ;
 long currentmonth = 0 ;
 byte Minute15Counter =14;
+byte Minute1Counter =0;
 
 boolean SetTimeWasSuccesfull = 0;
 
@@ -66,12 +71,37 @@ String NormalColor = "ForestGreen";
 String FaultColor = "FireBrick";
 
 
+float RectHeight = 110;
+byte RectWidth = 10;
+String RectColor = "Black";
+byte percentagegraphscalingfactor = 1;
+
+String SittingColor = "DeepSkyBlue";
+String GhostSittingColor = "Azure";
+
+String StandingColor = "SteelBlue";
+String GhostStandingColor = "AliceBlue";
+
+String AbsentColor = "MOCCASIN";
+String GhostAbsentColor = "CORNSILK";
+
+String StandUpColor = "FireBrick";
+String SitDownColor = "Crimson";
+
+String DeskMovingUpColor = "OrangeRed";
+String DeskMovingDownColor = "DarkOrange";
+
+//String WorkingColor = "DarkBlue";
+//String GhostWorkingColor = "ROYALBLUE";
 const long timeoutTime = 2000; // Define web page timeout time in milliseconds (example: 2000ms = 2s)
 String NormalFaultState = "Normal";
 
 
 float DailyTempArray[110] ; // 96 * 15min entries . array set at 100 cos round numbers
-// index 0 is the reading just taken, 1 is 30 min ago ect 
+// index 100 is the reading just taken, 99 is 30 min ago ect 
+
+float HourlyTempArray[110] ; // 96 * 1min entries . array set at 100 cos round numbers
+// index 100 is the reading just taken, 99 is 1 min ago ect 
 
 //float DayCounter = 0;
 long SecondCounter =0; // number of 1 second loops since reboot
@@ -81,7 +111,7 @@ long MinuteCounter = 0;
 //long SecondCounter = 0;
 
 
-
+byte HourlyTempArrayIndex = 0;
 byte DailyTempArrayIndex = 0;
 //byte WDResponcesArrayIndex = 0;
 
@@ -162,26 +192,67 @@ void setup() {
   pinMode(DoorSwitchPin, FUNCTION_3);
   pinMode(DoorSwitchPin, INPUT);
  
+//load arrays with a dummy value so the graph works on bootup
+for (DailyTempArrayIndex=0; DailyTempArrayIndex<=100; DailyTempArrayIndex = DailyTempArrayIndex+1){
+    
+                  DailyTempArray[DailyTempArrayIndex] = -10.00;
+                   }
 
-
-
+for (HourlyTempArrayIndex=0; HourlyTempArrayIndex<=100; HourlyTempArrayIndex = HourlyTempArrayIndex+1){
+    
+                  HourlyTempArray[HourlyTempArrayIndex] = -11.00;
+                   }
+                    
+/*
 // populate daily temp array with dummy values
-      DailyTempArray[0] = -11.11;
-      DailyTempArray[1] = -22.22;
-      DailyTempArray[2] = -30.33;
+      DailyTempArray[0] = -10.56;
+      DailyTempArray[1] = -16.50;
+      DailyTempArray[2] = -14.33;
+      DailyTempArray[50] = -17.00;
+      DailyTempArray[51] = -16.00;
+      DailyTempArray[52] = -127.00;
+      DailyTempArray[53] = -14.00;
+      DailyTempArray[54] = -13.00;
+      DailyTempArray[55] = -12.00;
+      DailyTempArray[56] = -11.00;
+      DailyTempArray[57] = -10.00;
+      DailyTempArray[67] = -14;
+      DailyTempArray[68] = -12.81;
+      DailyTempArray[69] = -11.38;
+      DailyTempArray[70] = -11.69;
+      DailyTempArray[71] = -15.13;
+      DailyTempArray[72] = -16.13;
+      DailyTempArray[73] = -14.13;
+      DailyTempArray[74] = -12.81;
+      DailyTempArray[75] = -11.38;
+      DailyTempArray[76] = -11.69;
+      DailyTempArray[77] = -15.13;
+      DailyTempArray[78] = -12.81;
+      DailyTempArray[79] = -11.38;
+      DailyTempArray[80] = -11.69;
+      DailyTempArray[81] = -15.13;
+      DailyTempArray[82] = -16.13;
+      DailyTempArray[83] = -14.13;
+      DailyTempArray[84] = -12.81;
+      DailyTempArray[85] = -11.38;
+      DailyTempArray[86] = -11.69;
+      DailyTempArray[87] = -15.13;
+      DailyTempArray[88] = -16.13;
+      DailyTempArray[89] = -14.13;
+      DailyTempArray[90] = -12.38;
+      DailyTempArray[91] = -11.06;
+      DailyTempArray[92] = -13.13;
+      DailyTempArray[93] = -15.75;
+      DailyTempArray[94] = -15.56;
+      DailyTempArray[95] = -13.56;
+      DailyTempArray[96] = -11.94;
 
-      DailyTempArray[12] = -12.00;
-DailyTempArray[19] = -19.00;
-
-            DailyTempArray[24] = -24;
-
-            DailyTempArray[50] = -50;
+      DailyTempArray[97] = -10.56;
+      DailyTempArray[98] = -16.56;
+      DailyTempArray[99] = -11.94;
       
-      DailyTempArray[94] = -100.1;
-      DailyTempArray[95] = -100.2;
-      DailyTempArray[96] = -96.3;
-       DailyTempArray[100] = -100.3;
-
+       DailyTempArray[100] = -10.69;
+*/
   SetTime(); // sysnc the clock..
      // Serial.println(" Delaying 5 sec before trying clock sync again...");
    //   delay (5000);
@@ -198,8 +269,7 @@ DailyTempArray[19] = -19.00;
     Serial.println("root CA certificate loaded");
   }
 */
-  //TempAlarmMute = false; // start muted
-  //DoorAlarmMute = false; // start muted
+ 
   
   Serial.println("VOID setup completed");
 }
@@ -319,20 +389,20 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
               MinTemperature = -30;
             }
 
-            if (header.indexOf("GET /WeeklyGraph") >= 0) {
-              WeeklyGraph = 1;
+            if (header.indexOf("GET /HourlyGraph") >= 0) {
+              HourlyGraph = 1;
               DailyGraph = 0;
               StatusPage = 0;
             }
 
             if (header.indexOf("GET /DailyGraph") >= 0) {
-              WeeklyGraph = 0;
+              HourlyGraph = 0;
               DailyGraph = 1;
               StatusPage = 0;
             }
 
            if (header.indexOf("GET /StatusPage") >= 0) {
-              WeeklyGraph = 0;
+              HourlyGraph = 0;
               DailyGraph = 0;
               StatusPage = 1;
             }
@@ -367,7 +437,7 @@ CurrentTemperature = (sensors.getTempCByIndex(0));
             //client.println(".buttonsmall { background-color: #195B6A; border: none; color: white; padding: 16px 40px;");
             //client.println("text-decoration: none; font-size: 10px; margin: 2px; cursor: pointer;}");
 
-              client.print("<p><a href=\"/StatusPage\"><button class=\"buttonsmall\">Status Page</button></a> <a href=\"/DailyGraph\"><button class=\"buttonsmall\">DailyGraph</button></a></p>");
+              client.print("<p><a href=\"/StatusPage\"><button class=\"buttonsmall\">Status Page</button></a> <a href=\"/DailyGraph\"><button class=\"buttonsmall\">Daily Graph</button></a> <a href=\"/HourlyGraph\"><button class=\"buttonsmall\">Hourly Graph</button></a></p>");
                    client.println();
 
             // Web Page Heading
@@ -383,13 +453,12 @@ if (StatusPage == 1) {;
 
             // Display current freezer state
             
-
             client.println ("<h1>Current Freezer Temperature: " + String(CurrentTemperature) + "°C</h1>\n");
             client.println ("");                       
-            client.println ("<h1>Past Maximum Temperature: " + String(MaxTemperature) + "°C</h1>\n");
-            client.println ("<h1>Past Minimum Temperature: " + String(MinTemperature) + "°C</h1>\n");
+            client.println ("<p>Past Maximum Temperature: " + String(MaxTemperature) + "°C</p>\n");
+            client.println ("<p>Past Minimum Temperature: " + String(MinTemperature) + "°C</p>\n");
             client.println (""); 
-            client.println ("<h1>Alarm Temperature Threshold: " + String(temperatureThreshold) + "°C</h1>\n");
+            client.println ("<p>Alarm Temperature Threshold: " + String(temperatureThreshold) + "°C</p>\n");
 
             if (OverTemp == true) {
               client.println("<p><a href=\"/2/on\"><button class=\"button buttonFault\">Temperature Fault</button></a> </p>");
@@ -467,10 +536,10 @@ if (DailyGraph == 1) {;
 
                     client.println ("<p> 15min counter =" + String(Minute15Counter) + "</p>");
 
-            client.println ("<p> 15 Min readings for last 24 hrs </p>");
+            client.println ("<p> 15 Min readings for last 24 hrs (Newest entry is last in array) </p>");
 
 
-// disply array contents 
+// display array contents 
      // for (LineIndex =0; LineIndex <10; LineIndex = LineIndex +1) {
       
                     client.print("<p>");
@@ -481,39 +550,117 @@ if (DailyGraph == 1) {;
                    }
                     client.println("</p>");
 
-                    
 
-      
-            
-/*
- * 
- * 
-                     client.print("<p>");
-                    // display array contents 0 - 10
-                   for (DailyTempArrayIndex=0; DailyTempArrayIndex<=9; DailyTempArrayIndex = DailyTempArrayIndex+1){
-    
-                   client.print( String(DailyTempArray[DailyTempArrayIndex]) + " , " );
-                   }
-                    client.println("</p>");
+               // Plot DailyTempArray graph
+               client.println ("<p> Graph of 15 Min readings for last 12 hrs </p>");
+                
+                  RectWidth = 20;
+                  client.print("<div class=\"chart\" style=\" border:1px solid black; width: 1120px; height: 250px; display: inline-block\" > ");
+                  client.println("<p>now..............-1h..............-2h..............-3h.............-4hr.............-5hr............-6hr..............-7hr.............-8hr.............-9hr.............-10hr.............-11hr.............-12hr</p>");
+                  // Plot first 1/4hour , its different to other bar containers that follow
+                  
+                  client.print("<div class=\"bar-container\"style=\"position: relative; left:22px; width: 20px; height: 100px; \" > ");
 
-                    client.print("<p>");
-                    // display array contents 10 - 19
-                   for (DailyTempArrayIndex=10; DailyTempArrayIndex<=19; DailyTempArrayIndex = DailyTempArrayIndex+1){
-    
-                   client.print( String(DailyTempArray[DailyTempArrayIndex]) + " , " );
-                   }
-                    client.println("</p>");
- * 
- * client.print("<p>" + String(DailyTempArray[DailyTempArrayIndex]) + " , " +  "</p>");
-                   }
-client.println (" String(DailyTempArray[0])");
-            client.println ("");
+                  RectColor = SittingColor;
+                  RectHeight = (DailyTempArray[100] * -10);// convert to postive result
+                  
+                  client.print("<div id=\"genericrectangle\" style=\"display:  width:" + String(RectWidth) + "px; height:" + String(RectHeight) + "px; background-color:" + (RectColor) + "\"></div>");
 
-client.println ("String(CurrentTemperature)");
+                  //client.println("<p> 0 </p>");
+                  client.println("<p>-" + String(RectHeight/10) + "</p>");
+                  
+                  client.print("</div>"); // first hour bar-container
+                  //Serial.print("1st bar printed " );
+                 
+                  // plot next 49 bars
+
+                  //Serial.println(" printing next 49 " );
+                  for (DailyTempArrayIndex = 1; DailyTempArrayIndex < 50;  DailyTempArrayIndex++) {
+                    client.print("<div class=\"bar-container\"style=\"position: relative; left:" + String(((DailyTempArrayIndex ) * 22) + 22) + "px; top: -" + String((DailyTempArrayIndex * 100)) + "px; width: 20px; height: 100px; \" > ");
+
+                              RectColor = SittingColor;                           
+                              
+                              RectHeight = (DailyTempArray[(100 - DailyTempArrayIndex)] * -10);// convert to postive result
+                              client.print("<div id=\"genericrectangle\" style=\"display:  width:" + String(RectWidth) + "px; height:" + String(RectHeight) + "px; background-color:" + (RectColor) + "\"></div>");
+                             client.println("<p>-" + String(RectHeight/10) + "</p>");
+                            client.print("</div>"); // bar container
+
+                            // Serial.print("DailyTempArrayIndex = " + String(DailyTempArrayIndex));
+                            // Serial.println("RectHeight = " + String(RectHeight));
+                  
+                  }
+                  
+  client.print("</div>"); // chart
+     }
+
+if (HourlyGraph == 1) {;
+
+            // Display last 1 hrs temps
+
+
+            client.println ("<p> Current Temp" + String(CurrentTemperature) + "</p>");
             client.println (""); 
-  */          
-}            
 
+                    client.println ("<p> 1min counter =" + String(Minute1Counter) + "</p>");
+
+            client.println ("<p> 1 Min readings for last 100 Min (Newest entry is last in array) </p>");
+
+
+// display array contents 
+     // for (LineIndex =0; LineIndex <10; LineIndex = LineIndex +1) {
+      
+                    client.print("<p>");
+                    
+                   for (HourlyTempArrayIndex=0; HourlyTempArrayIndex<=100; HourlyTempArrayIndex = HourlyTempArrayIndex+1){
+    
+                   client.print( String(HourlyTempArray[HourlyTempArrayIndex]) + " , " );
+                   }
+                    client.println("</p>");
+
+
+               // Plot HourlyTempArray graph
+               client.println ("<p> Graph of 1 Min readings for last 50 min </p>");
+                
+                  RectWidth = 20;
+                  client.print("<div class=\"chart\" style=\" border:1px solid black; width: 1120px; height: 250px; display: inline-block\" > ");
+                  client.println("<p>now..............-4m..............-8m..............-12m............-16m............-20m...........-24m............-28m............-32m...........-36m...........-40m...........-44m...........-48m</p>");
+                  // Plot first min , its different to other bar containers that follow
+                  
+                  client.print("<div class=\"bar-container\"style=\"position: relative; left:22px; width: 20px; height: 100px; \" > ");
+
+                  RectColor = StandingColor;
+                  RectHeight = (HourlyTempArray[100] * -10);// convert to postive result
+                  
+                  client.print("<div id=\"genericrectangle\" style=\"display:  width:" + String(RectWidth) + "px; height:" + String(RectHeight) + "px; background-color:" + (RectColor) + "\"></div>");
+
+                  //client.println("<p> 0 </p>");
+                  client.println("<p>-" + String(RectHeight/10) + "</p>");
+                  
+                  client.print("</div>"); // first hour bar-container
+                  //Serial.print("1st bar printed " );
+                 
+                  // plot next 49 bars
+
+                  //Serial.println(" printing next 49 " );
+                  for (HourlyTempArrayIndex = 1; HourlyTempArrayIndex < 50;  HourlyTempArrayIndex++) {
+                    client.print("<div class=\"bar-container\"style=\"position: relative; left:" + String(((HourlyTempArrayIndex ) * 22) + 22) + "px; top: -" + String((HourlyTempArrayIndex * 100)) + "px; width: 20px; height: 100px; \" > ");
+
+                              RectColor = StandingColor;                           
+                              
+                              RectHeight = (HourlyTempArray[(100 - HourlyTempArrayIndex)] * -10);// convert to postive result
+                              client.print("<div id=\"genericrectangle\" style=\"display:  width:" + String(RectWidth) + "px; height:" + String(RectHeight) + "px; background-color:" + (RectColor) + "\"></div>");
+                             client.println("<p>-" + String(RectHeight/10) + "</p>");
+                            client.print("</div>"); // bar container
+
+                            // Serial.print("HourlyTempArrayIndex = " + String(HourlyTempArrayIndex));
+                            // Serial.println("RectHeight = " + String(RectHeight));
+                  
+                  }
+                  
+  client.print("</div>"); // chart
+     }
+                 
+   
   // Update the web page with the current temperature 
   //updateWebPage(temperature); // dont know why this call fails, code copied inline to void loop for now...
 //Update the web page with the current temperature and the graph of the last week's readings
@@ -616,14 +763,15 @@ if (millis() >= (previousMillis)) {
 
 
         currentseconds = currentseconds + 1;
-        //SecondCounter = SecondCounter +1;
+        
         if (currentseconds == 60)
         {
            // Things to do every minute here
           currentseconds = 0;
           currentminutes = currentminutes + 1;
-          //MinuteCounter = MinuteCounter +1;
+          
           Minute15Counter = Minute15Counter +1;
+          Minute1Counter = Minute1Counter +1;
           Serial.println("another minute has passed");
 
         }
@@ -634,8 +782,7 @@ if (millis() >= (previousMillis)) {
           // Things to do every hour here
          currentminutes = 0;
          currenthours = currenthours + 1;
-         //HourCounter = HourCounter +1;
-         DayCounter = DayCounter + 0.0417 ; // (1/24)
+
          //Serial.println("UpTimeDays =  " + String(UpTimeDays) );
 
         }
@@ -645,7 +792,7 @@ if (millis() >= (previousMillis)) {
           currentseconds = 0;
           currentminutes = 0;
           currenthours = 0;
-         // DayCounter = DayCounter +1;
+        
           
           SetTime (); // resync the clock
           //UpTimeDays = UpTimeDays + 0.5; IDK why but it sometimes counts 2X at this point
@@ -701,17 +848,46 @@ if (millis() >= (previousMillis)) {
     
      DailyTempArray[DailyTempArrayIndex] = DailyTempArray[(DailyTempArrayIndex+1)];
 
-    Serial.print ("DailyTempArrayIndex = " + String(DailyTempArrayIndex));
+    //Serial.print ("DailyTempArrayIndex = " + String(DailyTempArrayIndex));
     } 
 
         // Insert current temp into index 100
         Serial.println("inserting new temp into index 0");
-           DailyTempArray[100] = CurrentTemperature ;
+        //DailyTempArray[100] = -16.56 ;
+        DailyTempArray[100] = CurrentTemperature ;
         
       }
 
-/*
-//old loopcountig       
+if (Minute1Counter == 1) {
+        Minute1Counter = 0;
+
+        // shuffle Temp Array 1 place to the left
+
+            
+    // Rotates HourlyTempArray[100] one slot to the left (toward index 0)
+
+    // for (HourlyTempArrayIndex=0; HourlyTempArrayIndex<=100; HourlyTempArrayIndex = HourlyTempArrayIndex+1){
+    
+    Serial.println("moving Hourly temp array");
+     for (HourlyTempArrayIndex=0; HourlyTempArrayIndex<=99; HourlyTempArrayIndex = HourlyTempArrayIndex+1){
+    
+     HourlyTempArray[HourlyTempArrayIndex] = HourlyTempArray[(HourlyTempArrayIndex+1)];
+
+    //Serial.print ("HourlyTempArrayIndex = " + String(HourlyTempArrayIndex));
+    } 
+
+        // Insert current temp into index 100
+        Serial.println("inserting new temp into index 0");
+        //HourlyTempArray[100] = -16.56 ;
+        HourlyTempArray[100] = CurrentTemperature ;
+        
+      }
+
+
+
+//old loopcounting (used to drive uptime display)
+        SecondCounter = SecondCounter+1;
+               
         if (SecondCounter == 60)
         {
            // Things to do every second here
@@ -740,7 +916,7 @@ if (millis() >= (previousMillis)) {
           DayCounter = DayCounter +1;
   
         }
-*/
+
   
 
     
